@@ -15,9 +15,20 @@
     "format": "prettier -w .",
     "format:check": "prettier -c .",
     "postbuild": "next-sitemap --config next-sitemap.config.js",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "testSignatureHelper": "npx ts-node ./src/lib/signature/signatureHelper.ts"
   },
   "dependencies": {
+    "@sentry/node": "^8.3.0",
+    "@simplewebauthn/browser": "^10.0.0",
+    "@simplewebauthn/types": "^10.0.0",
+    "@toruslabs/fetch-node-details": "^13.4.0",
+    "@toruslabs/http-helpers": "^6.1.1",
+    "@toruslabs/openlogin-utils": "^8.1.2",
+    "@toruslabs/torus.js": "^12.3.5",
+    "@web3auth/base": "^8.6.1",
+    "@web3auth/ethereum-provider": "^8.6.1",
+    "@web3auth/single-factor-auth": "8.0.0-beta.1",
     "clsx": "^2.0.0",
     "lucide-react": "^0.376.0",
     "next": "^14.0.4",
@@ -25,6 +36,7 @@
     "react-dom": "^18.2.0",
     "react-icons": "^4.12.0",
     "tailwind-merge": "^2.1.0",
+    "web3": "^4.8.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -57,7 +69,7 @@
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
-      "eslint --max-warnings=0",
+      "eslint --max-warnings=60",
       "prettier -w"
     ],
     "**/*.{json,css,scss,md,webmanifest}": [

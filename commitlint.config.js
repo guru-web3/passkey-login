@@ -14,7 +14,7 @@ module.exports = {
         'style',
         'refactor',
         'ci',
-        'test',
+        'testtemp',
         'perf',
         'revert',
         'vercel',
