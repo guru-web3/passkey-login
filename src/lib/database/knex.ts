@@ -4,7 +4,7 @@ import knexTinyLogger from 'knex-tiny-logger';
 import config from './knexfile';
 
 const env = process.env.NODE_ENV;
-const dbConfig1 = config.develsopment;
+const dbConfig1 = config.development;
 const dbConfig2 = config.development;
 
 // if (env === "production") {
