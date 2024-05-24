@@ -20,18 +20,20 @@ import {
 import Torus, { TorusKey } from '@toruslabs/torus.js';
 import log from 'loglevel';
 
+import { getrpID } from '@/lib/helper';
+
 import { PASSKEY_SVC_URL } from './constants';
 import { LoginParams, PasskeyServiceEndpoints } from './interfaces';
 export const getPasskeyEndpoints = (buildEnv: BUILD_ENV_TYPE) => {
   const baseUrl = PASSKEY_SVC_URL[buildEnv];
   return {
     register: {
-      options: `${baseUrl}/api/v3/auth/passkey/fast/register/options`,
-      verify: `${baseUrl}/api/v3/auth/passkey/fast/register/verify`,
+      options: `${baseUrl}/api/register/options`,
+      verify: `${baseUrl}/api/register/verify`,
     },
     authenticate: {
-      options: `${baseUrl}/api/v3/auth/passkey/fast/authenticate/options`,
-      verify: `${baseUrl}/api/v3/auth/passkey/fast/authenticate/verify`,
+      options: `${baseUrl}/api/login/options`,
+      verify: `${baseUrl}/api/login/verify`,
     },
     crud: {
       list: `${baseUrl}/api/v3/passkey/fast/list`,
@@ -105,7 +107,7 @@ export default class PasskeyService {
     return buffer.toString();
   }
 
-  toBase64(base64url: any) {
+  toBase64(base64url: string) {
     base64url = base64url.toString();
     return this.padString(base64url).replace(/\-/g, '+').replace(/_/g, '/');
   }
@@ -114,7 +116,11 @@ export default class PasskeyService {
     return base64.replace(/[=]/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   };
 
-  convertToRegistrationResponse = (result: any) => ({
+  convertToRegistrationResponse = (result: {
+    id: string;
+    rawId: string;
+    response: { attestationObject: string; clientDataJSON: string };
+  }) => ({
     ...result,
     id: this.fromBase64(result.id),
     rawId: this.fromBase64(result.rawId),
@@ -136,12 +142,10 @@ export default class PasskeyService {
   }): Promise<RegistrationResponseJSON> {
     const data = await this.getRegistrationOptions(params);
     data.options.challenge = this.toBase64(data.options.challenge);
-    data.options.rp.id = 'localhost';
-    data.options.user.id = 'testtemp';
+    data.options.rp.id = getrpID(window.location.origin);
 
-    this.trackingId = data.trackingId;
     const verificationResponse = await startRegistration(data.options);
-    return verificationResponse;
+    return { ...verificationResponse, ...{ userId: data.options.user.id } };
   }
 
   async registerPasskey(params: {
@@ -149,17 +153,23 @@ export default class PasskeyService {
     signatures: string[];
     passkeyToken?: string;
     data?: string;
+    userId?: string;
+    username?: string;
   }) {
     const result = await this.verifyRegistration(
       params.verificationResponse,
       params.signatures,
       params.passkeyToken as string,
-      params.data as string
+      params.data as string,
+      params.userId as string,
+      params.username as string
     );
     return { response: params.verificationResponse, data: result };
   }
 
-  convertToAuthenticationResponseJSON = (response: any) => ({
+  convertToAuthenticationResponseJSON = (
+    response: AuthenticationResponseJSON
+  ) => ({
     ...response,
     id: this.fromBase64(response.id),
     rawId: this.fromBase64(response.rawId),
@@ -171,113 +181,35 @@ export default class PasskeyService {
     clientExtensionResults: {},
     type: 'public-key',
   });
-  async registerCredential(options = {}) {
-    options = Object.assign(
-      {
-        challenge: new Uint8Array([1, 2, 3, 4]), // Example value
-        authenticatorSelection: {
-          requireResidentKey: false,
-        },
-        rp: {
-          id: 'localhost',
-          name: 'Selenium WebDriver Test',
-        },
-        // challenge: "MTcxNjQzNTQyMQ",
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-        user: {
-          name: 'name',
-          displayName: 'displayName',
-          id: Int8Array.from([1]),
-        },
-      },
-      options
-    );
-    try {
-      const credential = await navigator.credentials.create({
-        publicKey: options as any,
-      });
-      await this.getCredential({
-        id: credential?.id,
-        transports: [],
-        type: 'public-key',
-      });
-      console.log('createCredential', credential);
-      return {
-        status: 'OK',
-        credential: {
-          id: credential?.id,
-          rawId: Array.from(new Uint8Array(credential?.id as any)),
-          transports: (credential as any)?.response?.getTransports(),
-        },
-      };
-    } catch (error: any) {
-      return { status: error.toString() };
-    }
-  }
+  async loginUser(): Promise<ILoginData | null> {
+    const data = await this.getAuthenticationOptions();
+    data.options.challenge = this.toBase64(data.options.challenge);
+    (data.options as any).rpId = getrpID(window.location.origin);
 
-  async getCredential(credentials: any, options = {}) {
-    options = {
-      challenge: new Uint8Array([9, 0, 1, 2]), // Example value
-      // allowCredentials: credentials,
-      userVerification: 'preferred',
-      allowCredentials: [
-        {
-          id: credentials.id,
-          transports: credentials.transports,
-          type: 'public-key',
-        },
-      ],
-      rpId: 'localhost',
-    };
-    try {
-      const attestation = await navigator.credentials.get({
-        publicKey: options as any,
-      });
-      console.log('getCredential', attestation);
-      return {
-        status: 'OK',
-        attestation: {
-          userHandle: new Uint8Array((attestation as any).response.userHandle),
-        },
-      };
-    } catch (error: any) {
-      return { status: error.toString() };
-    }
-  }
-  async loginUser(authenticatorId?: string): Promise<ILoginData | null> {
-    const data = await this.getAuthenticationOptions(authenticatorId);
-    const { options, trackingId } = data;
-    const tempChallenge = options.challenge;
-    options.challenge = 'MTcxNjQzNTQyMQ';
-
-    this.trackingId = trackingId;
-    console.log({ options });
-    const verificationResponse = await startAuthentication(options);
-    // const verificationResponse = await this.startAuthenticationLocal(options);
-    console.log({ verificationResponse });
+    const verificationResponse = await startAuthentication(data.options);
     const formattedResponse =
       this.convertToAuthenticationResponseJSON(verificationResponse);
-    console.log({ formattedResponse });
-    const result = await this.verifyAuthentication(formattedResponse);
+    const result = await this.verifyAuthentication(
+      formattedResponse as AuthenticationResponseJSON
+    );
     const loginParams = {
       verifier: this.verifier,
-      verifierId: result.data?.verifier_id,
       idToken: verificationResponse.response.signature,
       extraVerifierParams: {
         signature: verificationResponse.response.signature,
         clientDataJSON: verificationResponse.response.clientDataJSON,
         authenticatorData: verificationResponse.response.authenticatorData,
-        publicKey: result.data?.credential_public_key,
-        challenge: result.data?.challenge_timestamp,
-        rpId: 'localhost',
+        rpId: getrpID(window.location.origin),
         rpOrigin: window.location.origin,
         credId: formattedResponse.id,
+        publicKey: result.data?.credential_public_key,
+        challenge: result.data?.challenge_timestamp,
       },
+      verifierId: result.data?.verifier_id,
     };
     // get passkey postbox key
     const { privateKey: passkeyPrivateKey, sessionSignatures } =
       await this.getPasskeyPostboxKey(loginParams as LoginParams);
-    console.log({ passkeyPrivateKey });
     if (result && result.verified && result.data) {
       log.info('authentication response', verificationResponse);
       return {
@@ -285,7 +217,7 @@ export default class PasskeyService {
         data: {
           privateKey: passkeyPrivateKey,
           sessionSignatures: sessionSignatures,
-          challenge: options.challenge,
+          challenge: result.data.challenge_timestamp,
           transports: result.data.transports,
           publicKey: result.data.credential_public_key,
           idToken: result.data.id_token,
@@ -321,10 +253,10 @@ export default class PasskeyService {
           },
         }
       );
-      if (response.success) {
-        return response.data.passkeys;
-      }
-      throw new Error('Error getting passkeys');
+      // if (response.success) {
+      return response.data.passkeys;
+      // }
+      // throw new Error('Error getting passkeys');
     } catch (error) {
       if (error instanceof Response) {
         const res = await error.json();
@@ -343,7 +275,6 @@ export default class PasskeyService {
     oAuthVerifierId,
     signatures,
     username,
-    passkeyToken,
   }: {
     oAuthVerifier: string;
     oAuthVerifierId: string;
@@ -355,10 +286,7 @@ export default class PasskeyService {
     try {
       const response = await post<{
         success: boolean;
-        data: {
-          options: PublicKeyCredentialCreationOptionsJSON;
-          trackingId: string;
-        };
+        options: PublicKeyCredentialCreationOptionsJSON;
       }>(this.endpoints.register.options, {
         web3auth_client_id: this.web3authClientId,
         verifier_id: oAuthVerifierId,
@@ -372,10 +300,7 @@ export default class PasskeyService {
         network: this.web3authNetwork,
         signatures,
       });
-      if (response.success) {
-        return response.data;
-      }
-      throw new Error('Error getting registration options');
+      return response;
     } catch (error) {
       if (error instanceof Response) {
         const res = await error.json();
@@ -394,12 +319,10 @@ export default class PasskeyService {
     verificationResponse: RegistrationResponseJSON,
     signatures: string[],
     token: string,
-    metadata: string
+    metadata: string,
+    userId: string,
+    username: string
   ) {
-    if (!this.trackingId)
-      throw new Error(
-        'trackingId is required, please restart the process again.'
-      );
     try {
       const response = await post<{
         verified: boolean;
@@ -414,6 +337,9 @@ export default class PasskeyService {
           network: this.web3authNetwork,
           signatures,
           metadata,
+          userId,
+          username,
+          cred: verificationResponse,
         },
         {
           headers: {
@@ -437,24 +363,17 @@ export default class PasskeyService {
     }
   }
 
-  private async getAuthenticationOptions(authenticatorId?: string) {
+  private async getAuthenticationOptions() {
     try {
       const response = await post<{
         success: boolean;
-        data: {
-          options: PublicKeyCredentialCreationOptionsJSON;
-          trackingId: string;
-        };
+        options: PublicKeyCredentialCreationOptionsJSON;
       }>(this.endpoints.authenticate.options, {
         web3auth_client_id: this.web3authClientId,
         rp_id: this.rpID,
-        // authenticator_id: authenticatorId,
         network: this.web3authNetwork,
       });
-      if (response.success) {
-        return response.data;
-      }
-      throw new Error('Error getting authentication options');
+      return response;
     } catch (error) {
       if (error instanceof Response) {
         const res = await error.json();
@@ -492,6 +411,8 @@ export default class PasskeyService {
         tracking_id: this.trackingId,
         verification_data: verificationResponse,
         network: this.web3authNetwork,
+        cred: verificationResponse,
+        userId: 'testtemp',
       });
       if (response.verified) {
         return { data: response.data, verified: response.verified };

@@ -1,0 +1,22 @@
+.loader {
+  display: flex;
+  align-items: center;
+}
+
+.loader-circle {
+  width: 10px;
+  height: 10px;
+  background-color: #333;
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: loader-bounce 0.8s infinite alternate;
+}
+
+@keyframes loader-bounce {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}

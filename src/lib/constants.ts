@@ -6,7 +6,7 @@ import {
 } from '@toruslabs/openlogin-utils';
 
 export const PASSKEY_SVC_URL: Record<BUILD_ENV_TYPE, string> = {
-  [BUILD_ENV.DEVELOPMENT]: 'http://localhost:3041',
+  [BUILD_ENV.DEVELOPMENT]: 'http://localhost:3000',
   [BUILD_ENV.TESTING]: 'https://api-develop-passwordless.web3auth.io',
   [BUILD_ENV.STAGING]: 'https://api-passwordless.web3auth.io',
   [BUILD_ENV.PRODUCTION]: 'https://api-passwordless.web3auth.io',
